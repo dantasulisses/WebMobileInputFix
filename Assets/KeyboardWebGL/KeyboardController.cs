@@ -1,8 +1,6 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
+﻿using AOT;
 using System.Runtime.InteropServices;
+using UnityEngine;
 
 namespace WebGLKeyboard
 {
@@ -11,174 +9,171 @@ namespace WebGLKeyboard
     /// </summary>
     public class KeyboardController : MonoBehaviour
     {
-        public bool isKeyboardOpen = false;
-        public UnityEngine.UI.InputField currentNativeInput;
-#if USE_TMPRO
-        public TMPro.TMP_InputField currentTmproInput;
-#endif
+        private static bool quitting;
+
+        private static KeyboardController instance;
+
+        public static KeyboardController Instance
+        {
+            get
+            {
+                if (instance == null && !quitting)
+                {
+                    instance = FindObjectOfType<KeyboardController>();
+                    if (!instance)
+                    {
+                        instance = new GameObject("_WebGLKeyboard").AddComponent<KeyboardController>();
+                    }
+                }
+                return instance;
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            quitting = true;
+        }
+
+        private BaseWebGLInputField current_handler;
+
+        private int known_keyboard_caret_position;
+
+        private int selection_start, selection_end;
+
+        private const int HTML_INPUT_DEFAULT_MAXLENGTH = 524288;
+
+        internal delegate void DelegateVoidString(string s1);
+
+        internal delegate void DelegateVoidStringInt(string s1, int num1);
+
         [DllImport("__Internal")]
-        private static extern void OpenInputKeyboard(string str);
+        private static extern void SetWebGLKeyboardCallbacks(
+                                    DelegateVoidString submitInput,
+                                    DelegateVoidStringInt updateInput
+                                    );
+
+        [DllImport("__Internal")]
+        private static extern void OpenInputKeyboard(string currentValue, string type, int characterLimit);
+
         [DllImport("__Internal")]
         private static extern void CloseInputKeyboard();
-        
-        //Just adds these functions references to avoid stripping
-        [DllImport("__Internal")]
-        private static extern void FixInputOnBlur();
-        [DllImport("__Internal")]
-        private static extern void FixInputUpdate();
 
-        void OnEnable()
+        [DllImport("__Internal")]
+        private static extern void SetCaretPosition(int pos);
+
+        [DllImport("__Internal")]
+        private static extern void SetSelectionInKeyboard(int start, int end);
+
+        private void Awake()
         {
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            if (instance == null)
+            {
+                instance = this;
+            }
+            else if (instance != this)
+            {
+                Destroy(this);
+            }
         }
-        void OnDisable()
-        {
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-        }
+
         private void Start()
-        {
-            PadronizeObjectName();
-            //Calls the scene loaded in the first scene manually because this component will initialize after the scene load
-            OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
-
-            DontDestroyOnLoad(gameObject);
-        }
-        /// <summary>
-        /// Changes this object name and parent to guarantee that it will be accessible from the outside javascript functions
-        /// </summary>
-        private void PadronizeObjectName()
         {
             gameObject.name = "_WebGLKeyboard";
             gameObject.transform.SetParent(null);
+            DontDestroyOnLoad(gameObject);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            SetWebGLKeyboardCallbacks(SubmitInput, UpdateInput);
+#endif
         }
-        /// <summary>
-        /// Callback when scene loads to add the DetectFocus component to every input field
-        /// </summary>
-        /// <param name="scene"></param>
-        /// <param name="mode"></param>
-        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+
+        public void RequestKeyboard(BaseWebGLInputField handler, string initial_text, int characterLimit, KeyboardType type = KeyboardType.text)
         {
-            List<UnityEngine.UI.InputField> nativeInputs = FindObjectsOfTypeInScene<UnityEngine.UI.InputField>(scene);
-            for (int x = 0; x < nativeInputs.Count; x++)
+            if (current_handler == null || current_handler == handler)
             {
-                DetectInputFocus detect = nativeInputs[x].gameObject.AddComponent<DetectInputFocus>();
-                detect.Initialize(this);
-            }
+                if (current_handler == null)
+                {
+                    current_handler = handler;
+                    known_keyboard_caret_position = current_handler.CaretPosition;
+                    selection_start = Mathf.Min(current_handler.SelectionStart, current_handler.SelectionEnd);
+                    selection_end = Mathf.Max(current_handler.SelectionStart, current_handler.SelectionEnd);
+                }
 
-#if USE_TMPRO
-            List<TMPro.TMP_InputField> tmProInputs = FindObjectsOfTypeInScene<TMPro.TMP_InputField>(scene);
-            for (int x = 0; x < tmProInputs.Count; x++)
+#if UNITY_WEBGL && !UNITY_EDITOR
+                OpenInputKeyboard(initial_text, type.ToString().ToLower(),
+                    characterLimit > 0 ? characterLimit : HTML_INPUT_DEFAULT_MAXLENGTH);
+                UnityEngine.WebGLInput.captureAllKeyboardInput = false;
+                StartCoroutine(MonitorCaretAndSelection());
+#endif
+            }
+        }
+
+        public void ReleaseKeyboard(BaseWebGLInputField handler)
+        {
+            if (current_handler == handler)
             {
-                DetectInputFocus detect = tmProInputs[x].gameObject.AddComponent<DetectInputFocus>();
-                detect.Initialize(this);
+                current_handler = null;
             }
+#if UNITY_WEBGL && !UNITY_EDITOR
+            CloseKeyboard();
 #endif
         }
-        /// <summary>
-        /// Call the external javascript function to trigger the keyboard and link to the input field
-        /// </summary>
-        /// <param name="input"></param>
-        public void FocusInput(UnityEngine.UI.InputField input)
-        {
-            isKeyboardOpen = true;
-            currentNativeInput = input;
-            OpenInputKeyboard(input.text);
 
-#if !UNITY_EDITOR && UNITY_WEBGL
-            UnityEngine.WebGLInput.captureAllKeyboardInput = false;
-#endif
-        }
-#if USE_TMPRO
-        /// <summary>
-        /// Call the external javascript function to trigger the keyboard and link to the input field
-        /// </summary>
-        /// <param name="input"></param>
-        public void FocusInput(TMPro.TMP_InputField input)
-        {
-            isKeyboardOpen = true;
-            currentTmproInput = input;
-            OpenInputKeyboard(input.text);
 
-#if !UNITY_EDITOR && UNITY_WEBGL
-            UnityEngine.WebGLInput.captureAllKeyboardInput = false;
-#endif
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private System.Collections.IEnumerator MonitorCaretAndSelection()
+        {
+            yield return new WaitForEndOfFrame();
+            while(current_handler!=null)
+            {
+                var ui_caret_position = current_handler.CaretPosition;
+                if (ui_caret_position != known_keyboard_caret_position)
+                {
+                known_keyboard_caret_position = ui_caret_position;
+                SetCaretPosition(ui_caret_position);
+                }
+                var sel_start = Mathf.Min(current_handler.SelectionStart, current_handler.SelectionEnd);
+                var sel_end = Mathf.Max(current_handler.SelectionStart, current_handler.SelectionEnd);
+                if (sel_start != selection_start || sel_end != selection_end)
+                {
+                selection_start = sel_start;
+                selection_end = sel_end;
+                SetSelectionInKeyboard(selection_start, selection_end);
+                }
+                yield return new WaitForEndOfFrame();
+            }
         }
 #endif
-        /// <summary>
-        /// Forces the keyboard to close and unfocus
-        /// </summary>
-        public void ForceClose()
+
+        private void CloseKeyboard()
         {
+            current_handler = null;
+#if UNITY_WEBGL && !UNITY_EDITOR
             CloseInputKeyboard();
-        }
-        /// <summary>
-        /// Clear the link to the open keyboard
-        /// </summary>
-        public void LoseFocus()
-        {
-            if (isKeyboardOpen == false)
-                return;
-
-            isKeyboardOpen = false;
-            if (currentNativeInput != null)
-            {
-                currentNativeInput.DeactivateInputField();
-                currentNativeInput = null;
-            }
-#if USE_TMPRO
-            if(currentTmproInput != null)
-            {
-                currentTmproInput.DeactivateInputField();
-                currentTmproInput = null;
-            }
-#endif
-
-#if !UNITY_EDITOR && UNITY_WEBGL
             UnityEngine.WebGLInput.captureAllKeyboardInput = true;
 #endif
         }
-        /// <summary>
-        /// Receives the string inputed in the keyboard
-        /// </summary>
-        /// <param name="value"></param>
-        public void ReceiveInputChange(string value)
+
+        [MonoPInvokeCallback(typeof(DelegateVoidStringInt))]
+        private static void UpdateInput(string new_text, int new_caret_position)
         {
-            Debug.Log(value);
-
-            //This shouldn't happen
-            if (isKeyboardOpen == false)
-                return;
-
-            //Applies the new string to the input field
-            if (currentNativeInput != null)
+            if (instance.current_handler != null)
             {
-                currentNativeInput.text = value;
+                new_text = "" + new_text;
+                instance.selection_start = new_caret_position;
+                instance.selection_end = new_caret_position;
+                instance.known_keyboard_caret_position = new_caret_position;
+                instance.current_handler.OnTextChange(new_text, new_caret_position);
             }
-#if USE_TMPRO
-            if (currentTmproInput != null)
-            {
-                currentTmproInput.text = value;
-            }
-#endif
         }
-        /// <summary>
-        /// Returns all objects of a type in a loaded scene
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
-        public List<T> FindObjectsOfTypeInScene<T>(Scene scene)
+
+        [MonoPInvokeCallback(typeof(DelegateVoidString))]
+        private static void SubmitInput(string final_text)
         {
-            List<T> results = new List<T>();
-            if (scene.isLoaded)
+            if (instance.current_handler != null)
             {
-                var allGameObjects = scene.GetRootGameObjects();
-                for (int x = 0; x < allGameObjects.Length; x++)
-                {
-                    var go = allGameObjects[x];
-                    results.AddRange(go.GetComponentsInChildren<T>(true));
-                }
+                instance.current_handler.OnKeyboardSubmit("" + final_text);
             }
-            return results;
+            instance.CloseKeyboard();
         }
     }
 }
