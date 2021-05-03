@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.ulidantas.webgl-keyboard": {
+      "version": "file:WebGLKeyboard",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.ext.nunit": {
       "version": "1.0.0",
       "depth": 1,
