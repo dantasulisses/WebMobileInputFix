@@ -1,14 +1,15 @@
 fileFormatVersion: 2
-guid: 592708b8b799f0246964b2a3112104c7
-timeCreated: 1533683766
-licenseType: Pro
+guid: dd86dc45b0ced434298c27c779c4ccb2
 PluginImporter:
   externalObjects: {}
   serializedVersion: 2
   iconMap: {}
   executionOrder: {}
+  defineConstraints: []
   isPreloaded: 0
   isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
   platformData:
   - first:
       Any: 
@@ -21,11 +22,6 @@ PluginImporter:
       enabled: 0
       settings:
         DefaultValueInitialized: true
-  - first:
-      Facebook: WebGL
-    second:
-      enabled: 1
-      settings: {}
   - first:
       WebGL: WebGL
     second:

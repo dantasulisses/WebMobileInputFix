@@ -1,0 +1,21 @@
+{
+    "name": "WebGLKeyboard",
+    "references": [
+        "GUID:6055be8ebefd69e48b49212b09b47b2f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.textmeshpro",
+            "expression": "",
+            "define": "USE_TMPRO"
+        }
+    ],
+    "noEngineReferences": false
+}

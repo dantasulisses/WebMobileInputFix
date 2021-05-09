@@ -1,0 +1,14 @@
+{
+  "name": "com.ulidantas.webgl-keyboard",
+  "displayName": "WebGL Keyboard",
+  "version": "0.0.1",
+  "unity": "2019.4",
+  "description": "Enable mobile input (virtual keyboard) be triggered by Input Fields.",
+  "keywords": [
+    "webgl"
+  ],
+  "author": {
+    "name": "dantasulisses",
+    "url": "https://github.com/dantasulisses/WebMobileInputFix"
+  }
+}
